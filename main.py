@@ -39,7 +39,82 @@ AUDIO_NAME_LEN=6
 INFER_THREAD=None
 PLAY_THREAD=None
 
+# 权重文件同步搬运到项目位置
+# WEIGHTS_BASE目录下是多个文件夹，每个文件夹里面有两个权重文件
+GPTSOVITS_BASE=r'D:\repos\GPT-SoVITS-beta0306fix2'
+WEIGHTS_BASE=r'E:\GPTsoVITs权重'
+AUTO_CONTROL_FLAG='auto_'
 
+def rename_cache_weight(dirname,weight_name):
+    return f'{AUTO_CONTROL_FLAG}{dirname}_{weight_name}'
+
+def sync_weight():
+    print(f'同步权重文件，从 {WEIGHTS_BASE} 到 {GPTSOVITS_BASE}')
+    
+    weight_list=os.listdir(WEIGHTS_BASE)
+    
+    gpt_should_exist_list=[]
+    sovits_should_exist_list=[]
+    
+    for weight in weight_list:
+        all_files = []
+        for root, dirs, files in os.walk(os.path.join(WEIGHTS_BASE,weight)):
+            for file in files:
+                all_files.append(os.path.join(root, file))
+
+        gpt_weight_list=[i for i in all_files if i.endswith('.ckpt')]
+        sovits_weight_list=[i for i in all_files if i.endswith('.pth')]
+        
+        gpt_should_exist_list.extend(
+            [(i,os.path.join(GPTSOVITS_BASE,'GPT_weights',rename_cache_weight(weight,os.path.basename(i)))) for i in gpt_weight_list]
+        )
+        sovits_should_exist_list.extend(
+            [(i,os.path.join(GPTSOVITS_BASE,'SoVITS_weights',rename_cache_weight(weight,os.path.basename(i)))) for i in sovits_weight_list]
+        )
+    
+    gpt_already_exist_list=os.listdir(os.path.join(GPTSOVITS_BASE,'GPT_weights'))
+    gpt_already_exist_list=[os.path.join(GPTSOVITS_BASE,'GPT_weights',i) for i in gpt_already_exist_list]
+    sovits_already_exist_list=os.listdir(os.path.join(GPTSOVITS_BASE,'SoVITS_weights'))
+    sovits_already_exist_list=[os.path.join(GPTSOVITS_BASE,'SoVITS_weights',i) for i in sovits_already_exist_list]
+    
+    # 格式化路径
+    gpt_already_exist_list=[k.replace('\\','/') for k in gpt_already_exist_list]
+    sovits_already_exist_list=[k.replace('\\','/') for k in sovits_already_exist_list]
+    gpt_should_exist_list=[(i[0].replace('\\','/'),i[1].replace('\\','/')) for i in gpt_should_exist_list]
+    sovits_should_exist_list=[(i[0].replace('\\','/'),i[1].replace('\\','/')) for i in sovits_should_exist_list]
+    
+    # 对于不是该方法自动管理的权重文件，不做处理
+    gpt_already_exist_list=[i for i in gpt_already_exist_list if os.path.basename(i).startswith(AUTO_CONTROL_FLAG)]
+    sovits_already_exist_list=[i for i in sovits_already_exist_list if os.path.basename(i).startswith(AUTO_CONTROL_FLAG)]
+    
+    # print(f'GPT权重文件：\n已存在：{gpt_already_exist_list}\n应存在：{gpt_should_exist_list}')
+    # print(f'SoVITS权重文件：\n已存在：{sovits_already_exist_list}\n应存在：{sovits_should_exist_list}')
+    
+    
+    # 删除多余的权重
+    for i in gpt_already_exist_list:
+        if i not in [j[1] for j in gpt_should_exist_list]:
+            os.remove(i)
+            print(f'删除多余权重文件 {i}')
+    for i in sovits_already_exist_list:
+        if i not in [j[1] for j in sovits_should_exist_list]:
+            os.remove(i)
+            print(f'删除多余权重文件 {i}')
+    
+    # 复制缺失的权重
+    for i in gpt_should_exist_list:
+        if i[1] not in gpt_already_exist_list:
+            shutil.copy(i[0],i[1])
+            print(f'复制权重文件 {i[0]} 到 {i[1]}')
+    for i in sovits_should_exist_list:
+        if i[1] not in sovits_already_exist_list:
+            shutil.copy(i[0],i[1])
+            print(f'复制权重文件 {i[0]} 到 {i[1]}')
+            
+    print('权重文件同步完成')
+    print(f'权重文件数量：GPT-{len(gpt_should_exist_list)}，SoVITS-{len(sovits_should_exist_list)}')
+    print(f'共有以下一些权重：\n{", ".join(weight_list)}')
+    
  
 def _async_raise(tid, exctype):
     """raises the exception, performs cleanup if needed"""
@@ -204,15 +279,18 @@ def cut2(inp):
 def cut_text(input_string):
     return cut2(input_string)
     # # 用selenium操作网页，得到处理结果
+    
+    # 需要合成的切分前文本
     # div_element = SHADOW_ROOT.find_element(By.ID, 'component-25')
     # textarea_element = div_element.find_element(By.TAG_NAME, 'textarea')
     # textarea_element.clear()
     # textarea_element.send_keys(input_string)
     
-
+    # 凑50字一切
     # button_element = SHADOW_ROOT.find_element(By.ID, 'component-27')
     # button_element.click()
     
+    # 切分后文本
     # div_element = SHADOW_ROOT.find_element(By.ID, 'component-31')
     # textarea_element = div_element.find_element(By.TAG_NAME, 'textarea')
     # time.sleep(3)
@@ -296,16 +374,18 @@ def p_run():
         if  len(to_process_list):
             input_string='\n'.join([k.strip() for k in to_process_list])
             
-            div_element = SHADOW_ROOT.find_element(By.ID, 'component-17')
+            # 需要合成的文本
+            div_element = SHADOW_ROOT.find_element(By.ID, 'component-22')
             textarea_element = div_element.find_element(By.TAG_NAME, 'textarea')
             textarea_element.clear()
             textarea_element.send_keys(input_string)
             
-            
-            button_element = SHADOW_ROOT.find_element(By.ID, 'component-20')
+            # 合成语音
+            button_element = SHADOW_ROOT.find_element(By.ID, 'component-31')
             button_element.click()
             
-            output_element = SHADOW_ROOT.find_element(By.ID, 'component-21')
+            # 输出的语音
+            output_element = SHADOW_ROOT.find_element(By.ID, 'component-32')
             p_wait_infer(output_element)
             
             audio_element = output_element.find_elements(By.TAG_NAME,'audio')
@@ -327,6 +407,8 @@ def p_stop():
 
 
 if __name__ == "__main__":
+    sync_weight()
+    
     create_driver()
     clear_cache()
     start_play_thread_control()
