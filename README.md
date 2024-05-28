@@ -20,3 +20,10 @@ pip install requirements.txt
 
 
 仅在windows平台测试过能用（主要是用到ctypes来删除线程的操作不知道会不会无法跨平台）
+
+
+
+
+原仓库：https://github.com/RVC-Boss/GPT-SoVITS
+
+个人使用的是20240207的gptsovits整合包
